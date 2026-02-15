@@ -193,7 +193,9 @@
 #include "components/led_controller.h"
 #include "components/button_controller.h"
 #include "components/audio_output.h"
+#include "components/mic_i2s.h"
 #include "components/config.h"
+#include "tasks/mic_task.h"
 #include <string.h>
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
@@ -223,14 +225,6 @@ static uint8_t brightness = INITIAL_BRIGHTNESS;
 //static bool pattern_active = true;
 
 void app_main() {
-    // Инициализация компонентов
-    led_strip_handle_t led_strip = led_controller_init();
-    button_controller_init();
-    audio_output_init();
-
-    // Установка начальной яркости
-    led_controller_set_brightness(led_strip, brightness);
-
     // Проигрываем тестовый звук при запуске
     //audio_play_test_tone(300);
     
@@ -246,6 +240,20 @@ void app_main() {
 #else
     tcpip_adapter_init();
 #endif
+
+    // Инициализация компонентов
+    led_strip_handle_t led_strip = led_controller_init();
+    button_controller_init();
+    audio_output_init();
+
+    // Установка начальной яркости
+    led_controller_set_brightness(led_strip, brightness);
+    
+    // Инициализация микрофона
+    ESP_ERROR_CHECK(mic_i2s_init());
+
+    // Создаём задачу для обработки аудио с микрофона
+    xTaskCreatePinnedToCore(mic_task, "mic_task", 4096, NULL, 5, NULL, 0);
     
     // Основной цикл
     while (1) {
@@ -332,78 +340,3 @@ void app_main() {
     // audio_element_deinit(mp3_decoder);
     // esp_periph_set_destroy(set);
 }
-
-
-// void audio_init(void)
-// {
-//     ESP_LOGI(TAG, "Initializing I2S stream...");
-    
-//     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
-//     i2s_cfg.need_expand = false;
-//     i2s_cfg.type = AUDIO_STREAM_WRITER;
-//     i2s_cfg.use_alc = true;           // включаем громкость
-//     i2s_cfg.volume = 1;             // 0..64
-    
-//     //i2s_cfg.i2s_config.sample_rate = SAMPLE_RATE;
-//     // i2s_cfg.i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
-//     // i2s_cfg.i2s_config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
-//     // i2s_cfg.i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-//     // i2s_cfg.i2s_port = I2S_NUM_0;
-    
-//     // ПИНЫ I2S — ЗАДАЁМ ЧЕРЕЗ pin_config
-//     // i2s_pin_config_t pin_config = {
-//     //     .bck_io_num = 26,
-//     //     .ws_io_num = 25,
-//     //     .data_out_num = 32,
-//     //     .data_in_num = -1
-//     // };
-//     // i2s_cfg.pin_config = &pin_config;
-    
-//     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
-//     ESP_LOGI(TAG, "I2S initialized, volume = %d", i2s_cfg.volume);
-// }
-
-// void play_tone(float frequency, int duration_ms, int volume)
-// {
-//     // Устанавливаем громкость
-//     esp_err_t err = i2s_alc_volume_set(i2s_stream_writer, volume);
-//     if (err != ESP_OK) {
-//         ESP_LOGE(TAG, "ALC volume set failed: %s", esp_err_to_name(err));
-//     }
-//     ESP_LOGI(TAG, "ALC volume set failed: %s", esp_err_to_name(err));
-    
-//     int num_samples = (SAMPLE_RATE * duration_ms) / 1000;
-    
-//     // DMA-память обязательна
-//     int16_t *samples = heap_caps_malloc(num_samples * sizeof(int16_t), MALLOC_CAP_DMA);
-//     if (!samples) {
-//         ESP_LOGE(TAG, "Failed to allocate DMA memory");
-//         return;
-//     }
-    
-//     // Генерация синуса
-//     for (int i = 0; i < num_samples; i++) {
-//         double angle = 2.0 * M_PI * frequency * i / SAMPLE_RATE;
-//         samples[i] = (int16_t)(AMPLITUDE * sin(angle));
-//     }
-    
-//     // ★★★ ИСПРАВЛЕНО: ТРИ АРГУМЕНТА, БЕЗ bytes_written И ТАЙМАУТА ★★★
-//     audio_element_err_t ret = audio_element_output(
-//         i2s_stream_writer,
-//         (char*)samples,
-//         num_samples * sizeof(int16_t)
-//     );
-    
-//     // if (ret != AUDIO_ELEMENT_ERR_OK) {
-//     //     ESP_LOGE(TAG, "audio_element_output failed: %d", ret);
-//     // }
-    
-//     // Тишина для выталкивания буфера
-//     int16_t *silence = heap_caps_calloc(256, sizeof(int16_t), MALLOC_CAP_DMA);
-//     if (silence) {
-//         audio_element_output(i2s_stream_writer, (char*)silence, 256 * sizeof(int16_t));
-//         free(silence);
-//     }
-    
-//     free(samples);
-// }
