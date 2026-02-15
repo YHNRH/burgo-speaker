@@ -32,4 +32,10 @@
 #define AUDIO_TAG   "AUDIO_OUTPUT"
 #define MAIN_TAG    "MAIN_APP"
 
+#define MIC_SAMPLE_RATE     16000
+#define RECORD_SECONDS       3
+#define RECORD_SAMPLES       (MIC_SAMPLE_RATE * RECORD_SECONDS)  // 48000
+#define RMS_TRIGGER_THRESH   10000000   // порог для начала записи
+#define BYTES_PER_SAMPLE     4       // int32_t
+
 #endif // __CONFIG_H__
