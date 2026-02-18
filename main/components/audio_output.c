@@ -18,6 +18,7 @@
 #include "http_stream.h"
 #include "i2s_stream.h"
 #include "mp3_decoder.h"
+#include "led_controller.h"
 
 #include "esp_peripherals.h"
 #include "periph_wifi.h"
@@ -82,7 +83,7 @@ void audio_output_init(void) {
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
     i2s_cfg.use_alc = true;      // ← ВКЛЮЧАЕМ АППАРАТНУЮ ГРОМКОСТЬ
-    i2s_cfg.volume = 32;         // ← НАЧАЛЬНАЯ ГРОМКОСТЬ (0…64, 32 = 0dB)
+    i2s_cfg.volume = 10;         // ← НАЧАЛЬНАЯ ГРОМКОСТЬ (0…64, 32 = 0dB)
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
 
     ESP_LOGI(TAG, "[2.3] Create mp3 decoder to decode mp3 file");
@@ -195,4 +196,6 @@ void audio_adjust_volume(int vol) {
         volume = MAX_VOLUME;
     
     i2s_alc_volume_set(i2s_stream_writer, volume);
+
+    led_controller_trigger_event(LED_STATE_VOLUME_CHANGE, 200); 
 }
