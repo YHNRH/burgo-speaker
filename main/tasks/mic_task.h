@@ -2,4 +2,4 @@
 
 #include <stdint.h>
 #include <stddef.h>
-void mic_task(void *arg);
+void audio_processing_start(void);

@@ -208,7 +208,8 @@
 #include "http_stream.h"
 #include "i2s_stream.h"
 #include "mp3_decoder.h"
-
+#include "hiesp.h"
+#include "hilexin.h"
 #include "esp_peripherals.h"
 #include "periph_wifi.h"
 #include "board.h"
@@ -220,9 +221,6 @@
 #endif
 
 
-// Глобальные переменные
-static uint8_t brightness = INITIAL_BRIGHTNESS;
-//static bool pattern_active = true;
 
 void app_main() {
     // Проигрываем тестовый звук при запуске
@@ -242,18 +240,14 @@ void app_main() {
 #endif
 
     // Инициализация компонентов
-    led_strip_handle_t led_strip = led_controller_init();
+    led_controller_init();
     button_controller_init();
     audio_output_init();
-
-    // Установка начальной яркости
-    led_controller_set_brightness(led_strip, brightness);
-    
     // Инициализация микрофона
     ESP_ERROR_CHECK(mic_i2s_init());
 
     // Создаём задачу для обработки аудио с микрофона
-    xTaskCreatePinnedToCore(mic_task, "mic_task", 4096, NULL, 5, NULL, 0);
+    audio_processing_start();
     
     // Основной цикл
     while (1) {
