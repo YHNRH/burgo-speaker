@@ -38,4 +38,6 @@ idf.py flash monitor
 
 (To exit the serial monitor, type ``Ctrl-]``.)
 
+<img width="3000" height="3345" alt="circuit_image" src="https://github.com/user-attachments/assets/2e9ec2c8-e79f-4177-bbf8-6b8152397c6b" />
+
 
