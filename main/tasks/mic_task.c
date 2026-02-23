@@ -9,6 +9,7 @@
 #include "../components/network_send.h"
 #include "../components/mic_i2s.h"
 #include "../components/led_controller.h"
+#include "../components/audio_output.h"
 #include "esp_log.h"
 
 #include <string.h>
@@ -25,9 +26,7 @@ typedef enum {
 
 static const char *TAG = "MIC_TASK";
 // Глобальные переменные состояния
-static mic_state_t state = MIC_STATE_IDLE;
 static int32_t *record_buf = NULL;
-static size_t record_pos = 0;
 static int chunk_size = 0; // получим после инициализации
 
 static void mic_task(void *arg) {
@@ -64,6 +63,7 @@ static void mic_task(void *arg) {
                     if (wake_word_process(processed, proc_samples)) {
                         ESP_LOGI(TAG, "Wake word detected!");
                         led_controller_set_state(LED_STATE_WAKE_WORD_DETECTED);
+                        audio_play_beep(800, 200);  // короткий сигнал 800 Гц
                         state = MIC_STATE_RECORDING;
                         record_pos = 0;
                         // Копируем текущий блок в буфер записи
@@ -78,7 +78,32 @@ static void mic_task(void *arg) {
                         }
                         if (record_pos >= RECORD_SAMPLES) {
                             ESP_LOGI(TAG, "Recording finished, sending...");
-                            send_wav_via_http(record_buf, RECORD_SAMPLES);
+
+                            // 1. Отправляем WAV и получаем ответ
+                            uint8_t *response_audio = NULL;
+                            size_t response_size = 0;
+                            
+                            esp_err_t err = send_audio_get_response(record_buf, RECORD_SAMPLES, 
+                                                                    &response_audio, &response_size);
+                            
+                            ESP_LOGI(TAG, "Got TTS response, err: %d", err);
+                            ESP_LOGI(TAG, "Got TTS response, response_audio: %d ", response_audio);
+                            ESP_LOGI(TAG, "Got TTS response, size: %d bytes", response_size);
+                            if (err == ESP_OK && response_audio && response_size > 0) {
+                                ESP_LOGI(TAG, "Got TTS response, size: %d bytes", response_size);
+                                
+                                // 2. Проигрываем ответ через I2S (с использованием вашего плеера)
+                                if (response_audio && response_size > 44) {
+                                    // Пропускаем WAV-заголовок (44 байта)
+                                    int16_t *pcm = (int16_t*)(response_audio + 44);
+                                    size_t pcm_samples = (response_size - 44) / sizeof(int16_t);
+                                    audio_play_pcm(pcm, pcm_samples);
+                                }
+                                free(response_audio);
+                            } else {
+                                ESP_LOGE(TAG, "Failed to get response from server");
+                            }
+                            
                             state = MIC_STATE_IDLE;
                             led_controller_set_state(LED_STATE_IDLE);
                         }
@@ -101,7 +126,35 @@ static void mic_task(void *arg) {
                 record_pos += to_copy;
                 if (record_pos >= RECORD_SAMPLES) {
                     ESP_LOGI(TAG, "Recording finished, sending...");
-                    send_wav_via_http(record_buf, RECORD_SAMPLES);
+                    
+                    // 1. Отправляем WAV и получаем ответ
+                    uint8_t *response_audio = NULL;
+                    size_t response_size = 0;
+                    
+                    esp_err_t err = send_audio_get_response(record_buf, RECORD_SAMPLES, 
+                                                            &response_audio, &response_size);
+
+                    ESP_LOGI(TAG, "Got TTS response, err: %d", err);
+                    ESP_LOGI(TAG, "Got TTS response, response_audio: %d ", response_audio);
+                    ESP_LOGI(TAG, "Got TTS response, size: %d bytes", response_size);
+                    if (err == ESP_OK && response_audio && response_size > 0) {
+                        ESP_LOGI(TAG, "Got TTS response, size: %d bytes", response_size);
+                        
+                        // 2. Проигрываем ответ через I2S (с использованием вашего плеера)
+                        if (response_audio && response_size > 44) {
+                            // Пропускаем WAV-заголовок (44 байта)
+                            int16_t *pcm = (int16_t*)(response_audio + 44);
+                            size_t pcm_samples = (response_size - 44) / sizeof(int16_t);
+                            audio_play_pcm(pcm, pcm_samples);
+                        }
+                        free(response_audio);
+                    } else {
+                        ESP_LOGE(TAG, "Failed to get response from server");
+                                            ESP_LOGI(TAG, "Got TTS response, err: %d", err);
+                    ESP_LOGI(TAG, "Got TTS response, response_audio: %d ", response_audio);
+                    ESP_LOGI(TAG, "Got TTS response, size: %d bytes", response_size);
+                    }
+                    
                     state = MIC_STATE_IDLE;
                     led_controller_set_state(LED_STATE_IDLE); 
                 }
