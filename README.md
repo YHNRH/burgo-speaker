@@ -1,42 +1,143 @@
-# Wake Word Detection
+# ESP32-S3 Burgo Voice Assistant Firmware
 
-| Supported Targets | ESP32    | ESP32-S2 | ESP32-S3 | ESP32-P4 | ESP32-C3 | ESP32-C5 | ESP32-C6 | 
-| ----------------- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
+Прошивка для умной колонки на базе ESP32-S3. Распознаёт wake word «София», записывает голосовую команду, отправляет на сервер, воспроизводит ответ и управляет светодиодами.
 
-(See the [README.md](../README.md) file in the upper level 'examples' directory for more information about examples.)
+## ✨ Возможности
 
-This example is used to test performance of wakenet.(the word word engine of Espressif).
-This example can load multiple models, but can only run two models at the same time
+- Wake word detection на базе **ESP-SR** (модель `wn9_sophia_tts`)
+- AFE (Audio Front-End) для шумоподавления и автоматической регулировки громкости (AGC)
+- Запись команды (3 секунды) и отправка на сервер по HTTP
+- Воспроизведение полученного аудио (WAV) через I2S
+- Сенсорные кнопки для регулировки громкости
+- Управление светодиодной лентой WS2812 (три светодиода) с визуальной обратной связью
+- Подключение по Wi-Fi, автоматическое переподключение
+- Использование PSRAM для больших буферов
 
+## 🛠 Аппаратные требования
 
-### Configure
+- Плата с **ESP32-S3** (например, ESP32-S3-DevKitC-1)
+- I2S микрофон (например, INMP441)
+- I2S усилитель (например, MAX98357) + динамик
+- Три сенсорные кнопки (опционально)
+- Три светодиода WS2812 (лента)
 
-Select board and wake words
+### Пины по умолчанию
+
+| Компонент       | Пин  |
+|-----------------|------|
+| Микрофон BCK    | 5    |
+| Микрофон WS     | 45   |
+| Микрофон DATA   | 6    |
+| Усилитель BCK   | 26   |
+| Усилитель WS    | 25   |
+| Усилитель DATA  | 32   |
+| LED лента       | 48   |
+| Кнопка Volume+  | 1    |
+| Кнопка Volume-  | 2    |
+
+> ⚠️ Пины можно изменить в файлах `mic_i2s.c`, `audio_output.c` и `led_controller.c`.
+
+## 📦 Программные зависимости
+
+- **ESP-IDF** версии 5.1 или новее
+- **ESP-ADF** (фреймворк для аудио)
+- **ESP-SR** (распознавание речи) – компонент `espressif/esp-sr^2.2.0`
+- Компоненты: `led_strip`, `esp_http_client`, `nvs_flash`
+
+## 🔧 Настройка проекта
+
+### 1. Установите ESP-IDF и ESP-ADF
+Следуйте официальным инструкциям:
+- [ESP-IDF Getting Started](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/index.html)
+- [ESP-ADF](https://docs.espressif.com/projects/esp-adf/en/latest/get-started.html)
+
+### 2. Клонируйте репозиторий
+```bash
+git clone https://github.com/yourname/esp32-s3-smart-speaker.git
+cd esp32-s3-smart-speaker
 ```
-idf.py set-target esp32s3
+### 3. Настройте конфигурацию
+```bash
+
 idf.py menuconfig
-
-# Select audio board
-Audio Media HAL -> Audio hardware board -> ESP32-S3-Korvo-1
-
-# Load one wakenet model
-ESP Speech Recognition -> Select wake words -> Hi,Lexin (wn9_hilexin)
-
-# Load multiple wakenet models
-ESP Speech Recognition -> Select wake words -> Hi,Lexin (wn9_hilexin) -> Load Multiple Wake Words
-ESP Speech Recognition -> Load Multiple Wake Words -> Hi,Lexin (wn9_hilexin)
-                                                   -> Hi,ESP (wn9_hiesp)
 ```
+Важные пункты:
 
-### build&flash
+    Wi-Fi: укажите SSID и пароль в Example Connection Configuration
 
-Build the project and flash it to the board, then run the monitor tool to view the output via serial port:
+    ESP-SR: выберите WakeNet 9 и модель Sophia (или другую) – обязательно отключите Use model partition (модель встроена в прошивку)
 
+    SPIRAM: включите поддержку PSRAM и выберите MALLOC_CAP_SPIRAM
+
+    Audio: настройте частоту I2S (по умолчанию 44100 Гц) в audio_output.c
+
+### 4. Сборка и прошивка
+```bash
+
+idf.py build
+idf.py -p /dev/ttyUSB0 flash monitor
 ```
-idf.py flash monitor 
-```
+### 🗂 Структура проекта
+```text
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+main/
+├── audio_output.c       # Инициализация I2S для плеера, функции воспроизведения
+├── audio_output.h
+├── led_controller.c     # Управление светодиодной лентой (эффекты, состояния)
+├── led_controller.h
+├── mic_i2s.c            # Чтение с микрофона через I2S_NUM_1
+├── mic_i2s.h
+├── network_send.c       # HTTP-отправка записей и приём ответов
+├── network_send.h
+├── tasks/               # Задачи FreeRTOS
+│   └── mic_task.c       # Задача обработки микрофона (AFE, запись, отправка)
+├── wake_word.c          # Инициализация AFE и детекция wake word
+├── wake_word.h
+├── config.h             # Общие константы (RECORD_SAMPLES, пины)
+└── CMakeLists.txt       # Сборка компонента main
+```
+### 🎤 Wake Word
+
+Проект использует модель wn9_sophia_tts (активируется фразой «София»). Для работы убедитесь, что в menuconfig она выбрана и опция Use model partition отключена.
+🎚 Регулировка громкости
+
+Громкость изменяется сенсорными кнопками и запоминается в NVS. Вызов i2s_alc_volume_set() меняет громкость на лету (если поддерживается чипом). Для ESP32-S3 аппаратный ALC в стандартном I2S-режиме не работает, поэтому в проекте используется программное умножение сэмплов в audio_output.c.
+### 💡 Светодиоды
+
+Реализованы следующие состояния:
+
+    IDLE – синее дыхание
+
+    WAKE_WORD_DETECTED – зелёное мигание
+
+    RECORDING – белый статический свет
+
+    PLAYING – градиент (красный-зелёный-синий)
+
+    VOLUME_CHANGE – жёлтая волна
+
+    ERROR – красное мигание
+
+### 📡 Взаимодействие с сервером
+
+После детекции wake word колонка записывает 3 секунды звука и отправляет их на сервер по адресу, указанному в network_send.c (переменная SERVER_URL). Ожидается, что сервер вернёт WAV-файл (голосовой ответ), который будет немедленно воспроизведён.
+### 🧪 Отладка
+
+    Включите логи через menuconfig (Component config → Log output).
+
+    Основные сообщения выводятся с тегами MIC_TASK, HTTP, WAKE_WORD, LED.
+
+### 🚀 Дальнейшие улучшения
+
+    Поддержка OTA-обновлений
+
+    Интеграция с WebSocket для двусторонней связи
+
+    Использование VAD для сокращения передаваемых данных
+
+    Переключение частоты I2S для голоса/музыки
+
+    Аппаратное управление громкостью через внешний кодек
 
 <img width="3000" height="3345" alt="circuit_image" src="https://github.com/user-attachments/assets/2e9ec2c8-e79f-4177-bbf8-6b8152397c6b" />
 
