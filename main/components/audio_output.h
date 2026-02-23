@@ -17,4 +17,7 @@ void audio_play_note(float frequency, int duration_ms);
 
 void audio_adjust_volume(int vol);
 
+void audio_play_beep(int freq_hz, int duration_ms);
+void audio_play_pcm(const int16_t *pcm_data, size_t num_samples); // PCM 16 бит, моно, 16 кГц
+
 #endif // __AUDIO_OUTPUT_H__

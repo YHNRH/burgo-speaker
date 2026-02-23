@@ -199,3 +199,27 @@ void audio_adjust_volume(int vol) {
 
     led_controller_trigger_event(LED_STATE_VOLUME_CHANGE, 200); 
 }
+
+
+void audio_play_beep(int freq_hz, int duration_ms) {
+    const int sample_rate = I2S_SAMPLE_RATE; // должно быть определено
+    int num_samples = (sample_rate * duration_ms) / 1000;
+    int16_t *samples = heap_caps_malloc(num_samples * sizeof(int16_t), MALLOC_CAP_DMA);
+    if (!samples) {
+        ESP_LOGE("AUDIO", "Failed to allocate beep buffer");
+        return;
+    }
+
+    for (int i = 0; i < num_samples; i++) {
+        float t = (float)i / sample_rate;
+        samples[i] = (int16_t)(3000 * sin(2 * M_PI * freq_hz * t));
+    }
+
+    audio_element_output(i2s_stream_writer, (char*)samples, num_samples * sizeof(int16_t));
+    free(samples);
+}
+
+void audio_play_pcm(const int16_t *pcm_data, size_t num_samples) {
+    if (!pcm_data || num_samples == 0) return;
+    audio_element_output(i2s_stream_writer, (char*)pcm_data, num_samples * sizeof(int16_t));
+}
